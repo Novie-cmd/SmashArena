@@ -471,25 +471,20 @@ export default function App() {
                 {/* Explicit Customer QR Barcode Card */}
                 <div className="border border-slate-750 bg-white p-4 rounded-xl flex flex-col items-center justify-center text-slate-950 shadow-2xl relative shrink-0">
                   <div className="border-4 border-slate-100 p-1.5 bg-white rounded-lg">
-                    <svg className="w-28 h-28 text-slate-950 cursor-pointer hover:scale-105 transition-transform" viewBox="0 0 100 100" fill="currentColor" onClick={handleStartScan} title="Klik untuk Mulai Pindai">
-                      {/* Outer corner squares */}
-                      <path d="M0,0 h30 v30 h-30 z M10,10 h10 v10 h-10 z" />
-                      <path d="M70,0 h30 v30 h-30 z M80,10 h10 v10 h-10 z" />
-                      <path d="M0,70 h30 v30 h-30 z M10,80 h10 v10 h-10 z" />
-                      {/* Inner alignment pattern squares and random looking QR barcode data */}
-                      <rect x="35" y="5" width="8" height="8" />
-                      <rect x="48" y="15" width="12" height="6" />
-                      <rect x="5" y="35" width="10" height="10" />
-                      <rect x="45" y="35" width="20" height="15" />
-                      <rect x="80" y="35" width="15" height="10" />
-                      <rect x="35" y="55" width="12" height="12" />
-                      <rect x="55" y="55" width="10" height="6" />
-                      <rect x="75" y="55" width="20" height="10" />
-                      <rect x="35" y="75" width="25" height="20" />
-                      <rect x="75" y="75" width="10" height="10" />
-                      <rect x="90" y="85" width="10" height="10" />
-                      <rect x="15" y="50" width="10" height="4" />
-                    </svg>
+                    {typeof window !== 'undefined' ? (
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=020617&data=${encodeURIComponent(`${window.location.origin}${window.location.pathname}?portal=customer`)}`}
+                        alt="SmashArena Real Scannable QR Code"
+                        className="w-28 h-28 cursor-pointer hover:scale-105 transition-transform"
+                        referrerPolicy="no-referrer"
+                        onClick={handleStartScan}
+                        title="Pindai dengan kamera HP Anda untuk masuk Portal Pelanggan, atau klik untuk simulasikan pemindaian langsung!"
+                      />
+                    ) : (
+                      <div className="w-28 h-28 bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 font-mono">
+                        Generating...
+                      </div>
+                    )}
                   </div>
                   <span className="text-[10px] font-mono tracking-widest font-bold mt-2 uppercase text-slate-800 text-center">
                     SMASHARENA-PORTAL
