@@ -1,11 +1,119 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  setDoc, 
+  deleteDoc, 
+  onSnapshot,
+  getDocFromServer
+} from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { Booking } from './types';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const db = getFirestore(app);
+
+// Critical validation of connection to Firestore as mandated by SKILL.md
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration.");
+    }
+  }
+}
+testConnection();
+
+// Error handler as strictly mandated by SKILL.md
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+// Subscribe to real-time updates of bookings
+export const subscribeBookings = (onNext: (bookings: Booking[]) => void) => {
+  const path = 'bookings';
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      const list: Booking[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as Booking);
+      });
+      onNext(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    }
+  );
+};
+
+// Save single booking
+export const saveBookingToFirestore = async (booking: Booking): Promise<void> => {
+  const path = `bookings/${booking.id}`;
+  try {
+    await setDoc(doc(db, 'bookings', booking.id), booking);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+};
+
+// Delete single booking
+export const deleteBookingFromFirestore = async (bookingId: string): Promise<void> => {
+  const path = `bookings/${bookingId}`;
+  try {
+    await deleteDoc(doc(db, 'bookings', bookingId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+};
 
 // Configure Google OAuth Provider
 export const provider = new GoogleAuthProvider();

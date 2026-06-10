@@ -4,7 +4,16 @@ import CourtGrid from './components/CourtGrid';
 import BookingWizard from './components/BookingWizard';
 import OwnerPortal from './components/OwnerPortal';
 import { Booking, GoogleSheetsInfo } from './types';
-import { initAuth, googleSignIn, logout, createSpreadsheet, syncDataToSheets } from './firebase';
+import { 
+  initAuth, 
+  googleSignIn, 
+  logout, 
+  createSpreadsheet, 
+  syncDataToSheets,
+  subscribeBookings,
+  saveBookingToFirestore,
+  deleteBookingFromFirestore
+} from './firebase';
 import { FileSpreadsheet, ShieldCheck, CheckCircle, Smartphone, Info, RefreshCw, Camera, QrCode } from 'lucide-react';
 
 export default function App() {
@@ -112,9 +121,8 @@ export default function App() {
     return () => clearInterval(interval);
   }, [showScanner, scanStatus]);
 
-  // Seed Initial database bookings if none exist
+  // Seed Initial database bookings if none exist & Subscribe to real-time updates
   useEffect(() => {
-    const localBk = localStorage.getItem('smasharena_bookings');
     const localCost = localStorage.getItem('smasharena_operational_cost');
     const localSheets = localStorage.getItem('smasharena_sheets_info');
 
@@ -132,76 +140,94 @@ export default function App() {
       }
     }
 
-    // 3. Load or seed bookings
-    if (localBk) {
-      try {
-        setBookings(JSON.parse(localBk));
-      } catch (err) {
-        console.error('Failed parsing local bookings, seeding new ones', err);
-      }
-    } else {
-      // Seed beautiful, rich initial data to make the app look stunning and busy!
-      const today = new Date();
-      const formatOffset = (days: number) => {
-        const d = new Date(today);
-        d.setDate(today.getDate() + days);
-        return d.toISOString().split('T')[0];
-      };
-
-      const seedData: Booking[] = [
-        {
-          id: 'BK-789012',
-          customerName: 'Budi Santoso',
-          phone: '081234567890',
-          court: 'Lapangan A (Reguler)',
-          date: formatOffset(0), // Today
-          timeSlot: '07:00 - 08:00',
-          amount: 50000,
-          paymentMethod: 'ShopeePay',
-          paymentStatus: 'Paid',
-          createdAt: new Date().toLocaleString('id-ID')
-        },
-        {
-          id: 'BK-123456',
-          customerName: 'Siti Rahma',
-          phone: '085712345678',
-          court: 'Lapangan B',
-          date: formatOffset(0), // Today
-          timeSlot: '19:00 - 20:00',
-          amount: 50000,
-          paymentMethod: 'GoPay',
-          paymentStatus: 'Paid',
-          createdAt: new Date().toLocaleString('id-ID')
-        },
-        {
-          id: 'BK-556677',
-          customerName: 'Hafiz Pratama',
-          phone: '082199887766',
-          court: 'Lapangan B',
-          date: formatOffset(0), // Today
-          timeSlot: '20:00 - 21:00',
-          amount: 50000,
-          paymentMethod: 'BCA Virtual Account',
-          paymentStatus: 'Paid',
-          createdAt: new Date().toLocaleString('id-ID')
-        },
-        {
-          id: 'BK-991122',
-          customerName: 'Rian Wijaya',
-          phone: '089911223344',
-          court: 'Lapangan A (Reguler)',
-          date: formatOffset(1), // Tomorrow
-          timeSlot: '10:00 - 11:00',
-          amount: 50000,
-          paymentMethod: 'Mandiri Transfer',
-          paymentStatus: 'Paid',
-          createdAt: new Date().toLocaleString('id-ID')
+    // 3. Subscribe to Firestore for real-time bookings
+    const unsubscribeBookings = subscribeBookings((fbBookings) => {
+      if (fbBookings && fbBookings.length > 0) {
+        // Sort bookings by creation/transaction time or ID
+        setBookings(fbBookings);
+        localStorage.setItem('smasharena_bookings', JSON.stringify(fbBookings));
+      } else {
+        // If Firestore is empty, see if we have local bookings to upload, otherwise seed the default ones
+        const localBk = localStorage.getItem('smasharena_bookings');
+        if (localBk) {
+          try {
+            const parsed = JSON.parse(localBk);
+            if (parsed.length > 0) {
+              setBookings(parsed);
+              parsed.forEach((b: Booking) => {
+                saveBookingToFirestore(b);
+              });
+              return;
+            }
+          } catch (e) {}
         }
-      ];
 
-      setBookings(seedData);
-      localStorage.setItem('smasharena_bookings', JSON.stringify(seedData));
-    }
+        // Seed beautiful, rich initial data to make the app look stunning and busy!
+        const today = new Date();
+        const formatOffset = (days: number) => {
+          const d = new Date(today);
+          d.setDate(today.getDate() + days);
+          return d.toISOString().split('T')[0];
+        };
+
+        const seedData: Booking[] = [
+          {
+            id: 'BK-789012',
+            customerName: 'Budi Santoso',
+            phone: '081234567890',
+            court: 'Lapangan A (Reguler)',
+            date: formatOffset(0), // Today
+            timeSlot: '07:00 - 08:00',
+            amount: 50000,
+            paymentMethod: 'ShopeePay',
+            paymentStatus: 'Paid',
+            createdAt: new Date().toLocaleString('id-ID')
+          },
+          {
+            id: 'BK-123456',
+            customerName: 'Siti Rahma',
+            phone: '085712345678',
+            court: 'Lapangan B',
+            date: formatOffset(0), // Today
+            timeSlot: '19:00 - 20:00',
+            amount: 50000,
+            paymentMethod: 'GoPay',
+            paymentStatus: 'Paid',
+            createdAt: new Date().toLocaleString('id-ID')
+          },
+          {
+            id: 'BK-556677',
+            customerName: 'Hafiz Pratama',
+            phone: '082199887766',
+            court: 'Lapangan B',
+            date: formatOffset(0), // Today
+            timeSlot: '20:00 - 21:00',
+            amount: 50000,
+            paymentMethod: 'BCA Virtual Account',
+            paymentStatus: 'Paid',
+            createdAt: new Date().toLocaleString('id-ID')
+          },
+          {
+            id: 'BK-991122',
+            customerName: 'Rian Wijaya',
+            phone: '089911223344',
+            court: 'Lapangan A (Reguler)',
+            date: formatOffset(1), // Tomorrow
+            timeSlot: '10:00 - 11:00',
+            amount: 50000,
+            paymentMethod: 'Mandiri Transfer',
+            paymentStatus: 'Paid',
+            createdAt: new Date().toLocaleString('id-ID')
+          }
+        ];
+
+        setBookings(seedData);
+        localStorage.setItem('smasharena_bookings', JSON.stringify(seedData));
+        seedData.forEach((b) => {
+          saveBookingToFirestore(b);
+        });
+      }
+    });
 
     // Initialize Firebase Auth listener
     initAuth(
@@ -223,30 +249,39 @@ export default function App() {
         setSheetsInfo(prev => ({ ...prev, status: 'disconnected' }));
       }
     );
+
+    return () => {
+      unsubscribeBookings();
+    };
   }, []);
 
-  // Sync to local storage whenever bookings/costs change
-  const handleAddBookings = (newBookings: Booking[]) => {
-    const updated = [...bookings, ...newBookings];
-    setBookings(updated);
-    localStorage.setItem('smasharena_bookings', JSON.stringify(updated));
-    showAlert(`Berhasil menyewa ${newBookings.length} jam lapangan!`, 'success');
+  // Auto trigger Google Sheets sync in the background on the admin's device when bookings or costs change!
+  useEffect(() => {
+    if (sheetsInfo.status === 'connected' && sheetsInfo.spreadsheetId && bookings.length > 0) {
+      autoSyncData(sheetsInfo.spreadsheetId, bookings, operationalCost);
+    }
+  }, [bookings, sheetsInfo.status, sheetsInfo.spreadsheetId, operationalCost]);
 
-    // Auto trigger Google Sheets sync in the background if connected!
-    if (sheetsInfo.status === 'connected' && sheetsInfo.spreadsheetId) {
-      autoSyncData(sheetsInfo.spreadsheetId, updated, operationalCost);
+  // Sync to database whenever bookings are added
+  const handleAddBookings = async (newBookings: Booking[]) => {
+    try {
+      for (const b of newBookings) {
+        await saveBookingToFirestore(b);
+      }
+      showAlert(`Berhasil menyewa ${newBookings.length} jam lapangan!`, 'success');
+    } catch (e: any) {
+      console.error('Failed to save bookings:', e);
+      showAlert('Gagal menyimpan booking ke awan: ' + e.message, 'error');
     }
   };
 
-  const handleCancelBooking = (bookingId: string) => {
-    const updated = bookings.filter(b => b.id !== bookingId);
-    setBookings(updated);
-    localStorage.setItem('smasharena_bookings', JSON.stringify(updated));
-    showAlert('Booking berhasil dibatalkan.', 'info');
-
-    // Auto update Sheets in the background if connected
-    if (sheetsInfo.status === 'connected' && sheetsInfo.spreadsheetId) {
-      autoSyncData(sheetsInfo.spreadsheetId, updated, operationalCost);
+  const handleCancelBooking = async (bookingId: string) => {
+    try {
+      await deleteBookingFromFirestore(bookingId);
+      showAlert('Booking berhasil dibatalkan.', 'info');
+    } catch (e: any) {
+      console.error('Failed to delete booking:', e);
+      showAlert('Gagal membatalkan booking di awan: ' + e.message, 'error');
     }
   };
 

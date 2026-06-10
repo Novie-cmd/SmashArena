@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "booking": {
+      "title": "Booking",
+      "description": "Data pemesanan lapangan bulutangkis",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "court": { "type": "string" },
+        "date": { "type": "string" },
+        "timeSlot": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "paymentStatus": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "customerName", "phone", "court", "date", "timeSlot", "amount", "paymentMethod", "paymentStatus", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/bookings/{bookingId}": {
+      "schema": "booking",
+      "description": "Koleksi semua pemesanan lapangan bulutangkis dalam real-time"
+    }
+  }
+}
