@@ -11,9 +11,8 @@ import {
   logout, 
   createSpreadsheet, 
   syncDataToSheets,
-  subscribeBookings,
-  saveBookingToFirestore,
-  deleteBookingFromFirestore,
+  findSpreadsheetInDrive,
+  fetchBookingsFromSheets,
   setCustomAccessToken,
   getAccessToken
 } from './firebase';
@@ -145,10 +144,11 @@ export default function App() {
     return () => clearInterval(interval);
   }, [showScanner, scanStatus]);
 
-  // Seed Initial database bookings if none exist & Subscribe to real-time updates
+  // Load initial local states and register Google Auth Sheets synchronizer (bypassing Firestore entirely)
   useEffect(() => {
     const localCost = localStorage.getItem('smasharena_operational_cost');
     const localSheets = localStorage.getItem('smasharena_sheets_info');
+    const localBk = localStorage.getItem('smasharena_bookings');
 
     // 1. Load operational costs
     if (localCost) {
@@ -164,118 +164,118 @@ export default function App() {
       }
     }
 
-    // 3. Subscribe to Firestore for real-time bookings
-    const unsubscribeBookings = subscribeBookings((fbBookings) => {
-      if (fbBookings && fbBookings.length > 0) {
-        // Sort bookings by creation/transaction time or ID
-        setBookings(fbBookings);
-        localStorage.setItem('smasharena_bookings', JSON.stringify(fbBookings));
-      } else {
-        // If Firestore is empty, see if we have local bookings to upload, otherwise seed the default ones
-        const localBk = localStorage.getItem('smasharena_bookings');
-        if (localBk) {
-          try {
-            const parsed = JSON.parse(localBk);
-            if (parsed.length > 0) {
-              setBookings(parsed);
-              parsed.forEach((b: Booking) => {
-                saveBookingToFirestore(b);
-              });
-              return;
-            }
-          } catch (e) {}
+    // 3. Load local offline bookings or seed sample ones if first time
+    if (localBk) {
+      try {
+        const parsed = JSON.parse(localBk);
+        if (parsed.length > 0) {
+          setBookings(parsed);
+        } else {
+          seedInitialData();
         }
-
-        // Seed beautiful, rich initial data to make the app look stunning and busy!
-        const today = new Date();
-        const formatOffset = (days: number) => {
-          const d = new Date(today);
-          d.setDate(today.getDate() + days);
-          return d.toISOString().split('T')[0];
-        };
-
-        const seedData: Booking[] = [
-          {
-            id: 'BK-789012',
-            customerName: 'Budi Santoso',
-            phone: '081234567890',
-            court: 'Lapangan A (Reguler)',
-            date: formatOffset(0), // Today
-            timeSlot: '07:00 - 08:00',
-            amount: 50000,
-            paymentMethod: 'ShopeePay',
-            paymentStatus: 'Paid',
-            createdAt: new Date().toLocaleString('id-ID')
-          },
-          {
-            id: 'BK-123456',
-            customerName: 'Siti Rahma',
-            phone: '085712345678',
-            court: 'Lapangan B',
-            date: formatOffset(0), // Today
-            timeSlot: '19:00 - 20:00',
-            amount: 50000,
-            paymentMethod: 'GoPay',
-            paymentStatus: 'Paid',
-            createdAt: new Date().toLocaleString('id-ID')
-          },
-          {
-            id: 'BK-556677',
-            customerName: 'Hafiz Pratama',
-            phone: '082199887766',
-            court: 'Lapangan B',
-            date: formatOffset(0), // Today
-            timeSlot: '20:00 - 21:00',
-            amount: 50000,
-            paymentMethod: 'BCA Virtual Account',
-            paymentStatus: 'Paid',
-            createdAt: new Date().toLocaleString('id-ID')
-          },
-          {
-            id: 'BK-991122',
-            customerName: 'Rian Wijaya',
-            phone: '089911223344',
-            court: 'Lapangan A (Reguler)',
-            date: formatOffset(1), // Tomorrow
-            timeSlot: '10:00 - 11:00',
-            amount: 50000,
-            paymentMethod: 'Mandiri Transfer',
-            paymentStatus: 'Paid',
-            createdAt: new Date().toLocaleString('id-ID')
-          }
-        ];
-
-        setBookings(seedData);
-        localStorage.setItem('smasharena_bookings', JSON.stringify(seedData));
-        seedData.forEach((b) => {
-          saveBookingToFirestore(b);
-        });
+      } catch (e) {
+        seedInitialData();
       }
-    });
+    } else {
+      seedInitialData();
+    }
 
-    // Initialize Firebase Auth listener
-    initAuth(
-      (user, token) => {
+    function seedInitialData() {
+      const today = new Date();
+      const formatOffset = (days: number) => {
+        const d = new Date(today);
+        d.setDate(today.getDate() + days);
+        return d.toISOString().split('T')[0];
+      };
+
+      const seedData: Booking[] = [
+        {
+          id: 'BK-789012',
+          customerName: 'Budi Santoso',
+          phone: '081234567890',
+          court: 'Lapangan A (Reguler)',
+          date: formatOffset(0), // Today
+          timeSlot: '07:00 - 08:00',
+          amount: 50000,
+          paymentMethod: 'ShopeePay',
+          paymentStatus: 'Paid',
+          createdAt: new Date().toLocaleString('id-ID')
+        },
+        {
+          id: 'BK-123456',
+          customerName: 'Siti Rahma',
+          phone: '085712345678',
+          court: 'Lapangan B',
+          date: formatOffset(0), // Today
+          timeSlot: '19:00 - 20:00',
+          amount: 50000,
+          paymentMethod: 'GoPay',
+          paymentStatus: 'Paid',
+          createdAt: new Date().toLocaleString('id-ID')
+        },
+        {
+          id: 'BK-556677',
+          customerName: 'Hafiz Pratama',
+          phone: '082199887766',
+          court: 'Lapangan B',
+          date: formatOffset(0), // Today
+          timeSlot: '20:00 - 21:00',
+          amount: 50000,
+          paymentMethod: 'BCA Virtual Account',
+          paymentStatus: 'Paid',
+          createdAt: new Date().toLocaleString('id-ID')
+        },
+        {
+          id: 'BK-991122',
+          customerName: 'Rian Wijaya',
+          phone: '089911223344',
+          court: 'Lapangan A (Reguler)',
+          date: formatOffset(1), // Tomorrow
+          timeSlot: '10:00 - 11:00',
+          amount: 50000,
+          paymentMethod: 'Mandiri Transfer',
+          paymentStatus: 'Paid',
+          createdAt: new Date().toLocaleString('id-ID')
+        }
+      ];
+
+      setBookings(seedData);
+      localStorage.setItem('smasharena_bookings', JSON.stringify(seedData));
+    }
+
+    // Initialize Firebase Auth listener with Sheets data synchronization hook
+    const unsubscribeAuth = initAuth(
+      async (user, token) => {
         setUserEmail(user.email);
-        // If logged in, restore or update sheets status to connected if we have a spreadsheet ID in local storage
         if (localSheets) {
           try {
             const parsed = JSON.parse(localSheets);
             if (parsed.spreadsheetId) {
               setSheetsInfo(prev => ({ ...prev, status: 'connected' }));
+              
+              // Load actual bookings directly from Google Sheets
+              try {
+                const sheetBk = await fetchBookingsFromSheets(parsed.spreadsheetId, token);
+                if (sheetBk && sheetBk.length > 0) {
+                  setBookings(sheetBk);
+                  localStorage.setItem('smasharena_bookings', JSON.stringify(sheetBk));
+                  console.log("Successfully restored database statistics directly from Google Sheets!");
+                }
+              } catch (err) {
+                console.warn("Gagal sinkron data awal dari Google Sheets, menggunakan data cadangan lokal:", err);
+              }
             }
           } catch (e) {}
         }
       },
       () => {
         setUserEmail(null);
-        // If Auth fails or logs out, set sheets status to disconnected
         setSheetsInfo(prev => ({ ...prev, status: 'disconnected' }));
       }
     );
 
     return () => {
-      unsubscribeBookings();
+      unsubscribeAuth();
     };
   }, []);
 
@@ -287,25 +287,63 @@ export default function App() {
   }, [bookings, sheetsInfo.status, sheetsInfo.spreadsheetId, operationalCost]);
 
   // Sync to database whenever bookings are added
-  const handleAddBookings = async (newBookings: Booking[]) => {
+  const handleAddBookings = async (newBookingsList: Booking[]) => {
     try {
-      for (const b of newBookings) {
-        await saveBookingToFirestore(b);
+      const updatedBookings = [...bookings, ...newBookingsList];
+      setBookings(updatedBookings);
+      localStorage.setItem('smasharena_bookings', JSON.stringify(updatedBookings));
+
+      // If connected to Google Sheets, write directly
+      if (sheetsInfo.status === 'connected' && sheetsInfo.spreadsheetId) {
+        const token = getAccessToken();
+        if (token) {
+          showAlert('Menyinkronkan pemesanan ke Google Sheets...', 'info');
+          await syncDataToSheets(sheetsInfo.spreadsheetId, updatedBookings, operationalCost, token);
+          setSheetsInfo(prev => ({
+            ...prev,
+            lastSync: new Date().toLocaleString('id-ID'),
+            status: 'connected'
+          }));
+          showAlert(`Berhasil menyewa ${newBookingsList.length} jam lapangan & tersimpan di Google Sheets!`, 'success');
+        } else {
+          showAlert(`Berhasil menyewa ${newBookingsList.length} jam lapangan (Tersimpan Lokal)`, 'success');
+        }
+      } else {
+        showAlert(`Berhasil menyewa ${newBookingsList.length} jam lapangan!`, 'success');
       }
-      showAlert(`Berhasil menyewa ${newBookings.length} jam lapangan!`, 'success');
     } catch (e: any) {
       console.error('Failed to save bookings:', e);
-      showAlert('Gagal menyimpan booking ke awan: ' + e.message, 'error');
+      showAlert('Gagal menyimpan booking: ' + e.message, 'error');
     }
   };
 
   const handleCancelBooking = async (bookingId: string) => {
     try {
-      await deleteBookingFromFirestore(bookingId);
-      showAlert('Booking berhasil dibatalkan.', 'info');
+      const updatedBookings = bookings.filter(b => b.id !== bookingId);
+      setBookings(updatedBookings);
+      localStorage.setItem('smasharena_bookings', JSON.stringify(updatedBookings));
+
+      // If connected to Google Sheets, write directly
+      if (sheetsInfo.status === 'connected' && sheetsInfo.spreadsheetId) {
+        const token = getAccessToken();
+        if (token) {
+          showAlert('Mengupdate pembatalan ke Google Sheets...', 'info');
+          await syncDataToSheets(sheetsInfo.spreadsheetId, updatedBookings, operationalCost, token);
+          setSheetsInfo(prev => ({
+            ...prev,
+            lastSync: new Date().toLocaleString('id-ID'),
+            status: 'connected'
+          }));
+          showAlert('Booking berhasil dibatalkan & diperbarui di Google Sheets.', 'info');
+        } else {
+          showAlert('Booking berhasil dibatalkan.', 'info');
+        }
+      } else {
+        showAlert('Booking berhasil dibatalkan.', 'info');
+      }
     } catch (e: any) {
       console.error('Failed to delete booking:', e);
-      showAlert('Gagal membatalkan booking di awan: ' + e.message, 'error');
+      showAlert('Gagal membatalkan booking: ' + e.message, 'error');
     }
   };
 
@@ -352,9 +390,16 @@ export default function App() {
           setUserEmail('Connected (Custom OAuth)');
           setSheetsInfo(prev => ({ ...prev, status: 'syncing' }));
 
-          // Create a brand new Spreadsheet!
+          // Search Google Drive first for existing spreadsheet!
           const sheetTitle = `SmashArena - Pembukuan & Booking Lapangan`;
-          const doc = await createSpreadsheet(sheetTitle, token);
+          let doc = await findSpreadsheetInDrive(sheetTitle, token);
+          let isNew = false;
+          
+          if (!doc) {
+            isNew = true;
+            // Create a brand new beautiful Spreadsheet!
+            doc = await createSpreadsheet(sheetTitle, token);
+          }
 
           const newInfo: GoogleSheetsInfo = {
             spreadsheetId: doc.id,
@@ -366,9 +411,19 @@ export default function App() {
           setSheetsInfo(newInfo);
           localStorage.setItem('smasharena_sheets_info', JSON.stringify(newInfo));
 
-          // Initial populate data
-          await syncDataToSheets(doc.id, bookings, operationalCost, token);
-          showAlert('Spreadsheet Berhasil Dibuat & Sinkronisasi Selesai!', 'success');
+          if (isNew) {
+            // Initial populate data
+            await syncDataToSheets(doc.id, bookings, operationalCost, token);
+            showAlert('Spreadsheet Berhasil Dibuat di Google Drive & Sinkronisasi Selesai!', 'success');
+          } else {
+            // Pull existing bookings from found sheet
+            const fetchedBookings = await fetchBookingsFromSheets(doc.id, token);
+            if (fetchedBookings && fetchedBookings.length > 0) {
+              setBookings(fetchedBookings);
+              localStorage.setItem('smasharena_bookings', JSON.stringify(fetchedBookings));
+            }
+            showAlert('Spreadsheet Ditemukan di Google Drive & Data Berhasil Sinkron!', 'success');
+          }
           setShowSheetsConfigModal(false);
 
         } catch (error: any) {
@@ -395,9 +450,16 @@ export default function App() {
       setUserEmail(res.user.email);
       setSheetsInfo(prev => ({ ...prev, status: 'syncing' }));
 
-      // Create a brand new beautiful Spreadsheet!
+      // Search Google Drive first for existing spreadsheet!
       const sheetTitle = `SmashArena - Pembukuan & Booking Lapangan`;
-      const doc = await createSpreadsheet(sheetTitle, res.accessToken);
+      let doc = await findSpreadsheetInDrive(sheetTitle, res.accessToken);
+      let isNew = false;
+      
+      if (!doc) {
+        isNew = true;
+        // Create a brand new beautiful Spreadsheet!
+        doc = await createSpreadsheet(sheetTitle, res.accessToken);
+      }
 
       const newInfo: GoogleSheetsInfo = {
         spreadsheetId: doc.id,
@@ -409,9 +471,19 @@ export default function App() {
       setSheetsInfo(newInfo);
       localStorage.setItem('smasharena_sheets_info', JSON.stringify(newInfo));
 
-      // Initial populate data
-      await syncDataToSheets(doc.id, bookings, operationalCost, res.accessToken);
-      showAlert('Spreadsheet Berhasil Dibuat & Sinkronisasi Selesai!', 'success');
+      if (isNew) {
+        // Initial populate data
+        await syncDataToSheets(doc.id, bookings, operationalCost, res.accessToken);
+        showAlert('Spreadsheet Berhasil Dibuat di Google Drive & Sinkronisasi Selesai!', 'success');
+      } else {
+        // Pull existing bookings from found sheet
+        const fetchedBookings = await fetchBookingsFromSheets(doc.id, res.accessToken);
+        if (fetchedBookings && fetchedBookings.length > 0) {
+          setBookings(fetchedBookings);
+          localStorage.setItem('smasharena_bookings', JSON.stringify(fetchedBookings));
+        }
+        showAlert('Spreadsheet Ditemukan di Google Drive & Data Berhasil Sinkron!', 'success');
+      }
       setShowSheetsConfigModal(false);
 
     } catch (error: any) {

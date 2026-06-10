@@ -118,6 +118,7 @@ export const deleteBookingFromFirestore = async (bookingId: string): Promise<voi
 // Configure Google OAuth Provider
 export const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/spreadsheets');
+provider.addScope('https://www.googleapis.com/auth/drive.file');
 
 // Cache the access token in-memory
 let cachedAccessToken: string | null = null;
@@ -314,3 +315,59 @@ const updateSheetValues = async (
 
   return response.json();
 };
+
+// Find existing spreadsheet in Google Drive by title
+export const findSpreadsheetInDrive = async (title: string, token: string): Promise<{ id: string; url: string } | null> => {
+  const query = encodeURIComponent(`name = '${title}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`);
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,webViewLink)`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.warn(`Gagal mencari file di Google Drive: ${errText}`);
+    return null;
+  }
+
+  const data = await response.json();
+  if (data.files && data.files.length > 0) {
+    const file = data.files[0];
+    return {
+      id: file.id,
+      url: file.webViewLink || `https://docs.google.com/spreadsheets/d/${file.id}/edit`,
+    };
+  }
+  return null;
+};
+
+// Fetch bookings list from connected Google Sheet spreadsheet file
+export const fetchBookingsFromSheets = async (spreadsheetId: string, token: string): Promise<Booking[]> => {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Daftar%20Booking!A2:J1000`;
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  if (!response.ok) {
+    // If the spreadsheet exists but the specific sheet tab is not found or empty, return empty array
+    if (response.status === 404 || response.status === 400) return [];
+    throw new Error(`Gagal membaca booking dari Google Sheets: ${await response.text()}`);
+  }
+  const data = await response.json();
+  const rows = data.values || [];
+  return rows.map((row: any[]) => ({
+    id: row[0] || '',
+    customerName: row[1] || '',
+    phone: row[2] || '',
+    court: row[3] || '',
+    date: row[4] || '',
+    timeSlot: row[5] || '',
+    amount: Number(row[6]) || 0,
+    paymentMethod: row[7] || '',
+    paymentStatus: row[8] as 'Paid' | 'Unpaid',
+    createdAt: row[9] || ''
+  }));
+};
+
