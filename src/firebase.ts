@@ -167,6 +167,10 @@ export const getAccessToken = (): string | null => {
   return cachedAccessToken;
 };
 
+export const setCustomAccessToken = (token: string | null) => {
+  cachedAccessToken = token;
+};
+
 export const logout = async () => {
   await auth.signOut();
   cachedAccessToken = null;

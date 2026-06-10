@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SmashArena - Booking Lapangan Bulu Tangkis Online</title>
+    <script>
+      // Process Google OAuth callback if in popup
+      if (window.location.hash && window.location.hash.includes('access_token=')) {
+        try {
+          const hashStr = window.location.hash.substring(1);
+          const params = new URLSearchParams(hashStr);
+          const token = params.get('access_token');
+          if (token && window.opener) {
+            window.opener.postMessage({ type: 'GOOGLE_OAUTH_SUCCESS', token: token }, '*');
+            window.close();
+          }
+        } catch (e) {
+          console.error("Failed to parse OAuth hash", e);
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

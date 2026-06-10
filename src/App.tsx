@@ -13,7 +13,9 @@ import {
   syncDataToSheets,
   subscribeBookings,
   saveBookingToFirestore,
-  deleteBookingFromFirestore
+  deleteBookingFromFirestore,
+  setCustomAccessToken,
+  getAccessToken
 } from './firebase';
 import { FileSpreadsheet, ShieldCheck, CheckCircle, Smartphone, Info, RefreshCw, Camera, QrCode, Copy, ExternalLink, AlertTriangle } from 'lucide-react';
 
@@ -65,6 +67,15 @@ export default function App() {
     status: 'disconnected',
     lastSync: null
   });
+
+  // Client-side Custom Google Cloud OAuth Implicit flow states
+  const [sheetsAuthType, setSheetsAuthType] = useState<'firebase' | 'custom'>(() => {
+    return (localStorage.getItem('smasharena_sheets_auth_type') as 'firebase' | 'custom') || 'firebase';
+  });
+  const [customClientId, setCustomClientId] = useState<string>(() => {
+    return localStorage.getItem('smasharena_custom_client_id') || '';
+  });
+  const [showSheetsConfigModal, setShowSheetsConfigModal] = useState<boolean>(false);
 
   // Authorized Domain configuration modal state
   const [showDomainModal, setShowDomainModal] = useState<boolean>(false);
@@ -321,7 +332,62 @@ export default function App() {
 
   // Interactive Sheets Connection via Firebase Auth Google Sign In
   const handleConnectSheets = async () => {
+    setShowSheetsConfigModal(true);
+  };
+
+  // Google OAuth Listener for custom setup
+  useEffect(() => {
+    const handleOAuthMessage = async (e: MessageEvent) => {
+      // Validate origin is from standard app URL or localhost
+      const origin = e.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+         return;
+      }
+
+      if (e.data && e.data.type === 'GOOGLE_OAUTH_SUCCESS' && e.data.token) {
+        const token = e.data.token;
+        setCustomAccessToken(token);
+        
+        try {
+          setUserEmail('Connected (Custom OAuth)');
+          setSheetsInfo(prev => ({ ...prev, status: 'syncing' }));
+
+          // Create a brand new Spreadsheet!
+          const sheetTitle = `SmashArena - Pembukuan & Booking Lapangan`;
+          const doc = await createSpreadsheet(sheetTitle, token);
+
+          const newInfo: GoogleSheetsInfo = {
+            spreadsheetId: doc.id,
+            spreadsheetUrl: doc.url,
+            status: 'connected',
+            lastSync: new Date().toLocaleString('id-ID')
+          };
+
+          setSheetsInfo(newInfo);
+          localStorage.setItem('smasharena_sheets_info', JSON.stringify(newInfo));
+
+          // Initial populate data
+          await syncDataToSheets(doc.id, bookings, operationalCost, token);
+          showAlert('Spreadsheet Berhasil Dibuat & Sinkronisasi Selesai!', 'success');
+          setShowSheetsConfigModal(false);
+
+        } catch (error: any) {
+          console.error('Error connecting Google Sheets Custom OAuth:', error);
+          setSheetsInfo(prev => ({ ...prev, status: 'disconnected', error: error.message }));
+          showAlert('Gagal menyambung ke Google Sheets: ' + error.message, 'error');
+        }
+      }
+    };
+
+    window.addEventListener('message', handleOAuthMessage);
+    return () => window.removeEventListener('message', handleOAuthMessage);
+  }, [bookings, operationalCost]);
+
+  // Execute Firebase Auth connection
+  const executeFirebaseConnectSheets = async () => {
     try {
+      localStorage.setItem('smasharena_sheets_auth_type', 'firebase');
+      setSheetsAuthType('firebase');
       showAlert('Menghubungkan ke Akun Google Anda...', 'info');
       const res = await googleSignIn();
       if (!res) return;
@@ -346,6 +412,7 @@ export default function App() {
       // Initial populate data
       await syncDataToSheets(doc.id, bookings, operationalCost, res.accessToken);
       showAlert('Spreadsheet Berhasil Dibuat & Sinkronisasi Selesai!', 'success');
+      setShowSheetsConfigModal(false);
 
     } catch (error: any) {
       console.error('Error connecting Google Sheets:', error);
@@ -356,16 +423,42 @@ export default function App() {
       );
       if (isUnauthorizedDomain) {
         setShowDomainModal(true);
-        showAlert('Gagal menyambunig: Domain belum di-whitelist di Firebase.', 'error');
+        showAlert('Gagal menyambung: Domain belum di-whitelist di Firebase.', 'error');
       } else {
         showAlert('Gagal menyambung ke Google Sheets: ' + error.message, 'error');
       }
     }
   };
 
+  // Execute Client-side Custom Google Cloud OAuth Implicit flow
+  const executeCustomOAuthConnect = () => {
+    if (!customClientId) {
+      showAlert('Masukkan Client ID Google Cloud Anda terlebih dahulu!', 'error');
+      return;
+    }
+    localStorage.setItem('smasharena_sheets_auth_type', 'custom');
+    localStorage.setItem('smasharena_custom_client_id', customClientId);
+    setSheetsAuthType('custom');
+    
+    const origin = window.location.origin;
+    const scope = encodeURIComponent('https://www.googleapis.com/auth/spreadsheets');
+    const redirectUri = encodeURIComponent(origin); // index.html handles callback
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(customClientId)}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&prompt=consent`;
+    
+    showAlert('Membuka halaman otorisasi Google...', 'info');
+    const popup = window.open(authUrl, 'oauth_popup', 'width=600,height=700');
+    if (!popup) {
+      showAlert('Popup diblokir! Izinkan popup di browser Anda.', 'error');
+    }
+  };
+
   // Disconnect Google Sheets account
   const handleDisconnectSheets = async () => {
-    await logout();
+    if (sheetsAuthType === 'firebase') {
+      await logout();
+    } else {
+      setCustomAccessToken(null);
+    }
     setUserEmail(null);
     const cleared: GoogleSheetsInfo = {
       spreadsheetId: null,
@@ -382,6 +475,34 @@ export default function App() {
   const handleManualSyncNow = async () => {
     if (sheetsInfo.status === 'disconnected' || !sheetsInfo.spreadsheetId) {
       handleConnectSheets();
+      return;
+    }
+
+    if (sheetsAuthType === 'custom') {
+      const token = getAccessToken();
+      if (!token) {
+        showAlert('Token kedaluwarsa. Silakan sambungkan kembali Google Sheets kustom Anda.', 'info');
+        setShowSheetsConfigModal(true);
+        return;
+      }
+      try {
+        setSheetsInfo(prev => ({ ...prev, status: 'syncing' }));
+        showAlert('Sedang mengunggah data ke Google Sheets...', 'info');
+        await syncDataToSheets(sheetsInfo.spreadsheetId, bookings, operationalCost, token);
+        
+        const updatedInfo: GoogleSheetsInfo = {
+          ...sheetsInfo,
+          status: 'connected',
+          lastSync: new Date().toLocaleString('id-ID')
+        };
+        setSheetsInfo(updatedInfo);
+        localStorage.setItem('smasharena_sheets_info', JSON.stringify(updatedInfo));
+        showAlert('Data Google Sheets sukses disinkronkan!', 'success');
+      } catch (err: any) {
+        console.error(err);
+        setSheetsInfo(prev => ({ ...prev, status: 'connected', error: err.message }));
+        showAlert('Sinkronisasi gagal: ' + err.message, 'error');
+      }
       return;
     }
 
@@ -423,6 +544,19 @@ export default function App() {
   // Automatic Background update helper (requires active connection)
   const autoSyncData = async (sheetId: string, currentBookings: Booking[], currentCost: number) => {
     try {
+      if (sheetsAuthType === 'custom') {
+        const token = getAccessToken();
+        if (token) {
+          await syncDataToSheets(sheetId, currentBookings, currentCost, token);
+          setSheetsInfo(prev => ({
+            ...prev,
+            lastSync: new Date().toLocaleString('id-ID'),
+            status: 'connected'
+          }));
+        }
+        return;
+      }
+
       // Re-authenticate silently if possible or check cached token access
       const res = await googleSignIn();
       if (res) {
@@ -838,6 +972,157 @@ export default function App() {
                 Tutup Panduan
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* GOOGLE SHEETS CONFIGURATION MODAL */}
+      {showSheetsConfigModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 backdrop-blur-md p-4 overflow-y-auto animate-fade-in" id="sheets-config-modal">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 shadow-2xl relative overflow-hidden my-8">
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-emerald-500"></div>
+
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-100">
+                  Tautkan Google Spreadsheet
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowSheetsConfigModal(false)}
+                className="text-slate-400 hover:text-white text-sm font-semibold transition-colors bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-750 cursor-pointer"
+              >
+                Tutup ×
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* METHOD A: FIREBASE AUTOMATIC */}
+              <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between text-left">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="bg-blue-500/15 text-blue-400 text-[10px] font-mono px-2 py-0.5 rounded border border-blue-500/20">Metode A</span>
+                    <h4 className="text-sm font-bold text-slate-200">Koneksi Otomatis</h4>
+                  </div>
+                  <p className="text-xs text-slate-404 leading-relaxed text-slate-400 mb-4">
+                    Menggunakan login Google default dari Firebase. Sangat praktis namun membutuhkan pengaturan whitelist domain di Firebase Console jika terjadi error <code className="text-amber-400">auth/unauthorized-domain</code>.
+                  </p>
+                </div>
+                
+                <button
+                  onClick={executeFirebaseConnectSheets}
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-blue-600/15 cursor-pointer mt-4"
+                  type="button"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Masuk via Firebase
+                </button>
+              </div>
+
+              {/* METHOD B: CUSTOM CLIENT ID */}
+              <div className="bg-slate-950 p-5 rounded-2xl border border-emerald-500/20 shadow-lg shadow-emerald-500/5 relative overflow-hidden flex flex-col justify-between text-left">
+                <div className="absolute top-0 right-0 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold px-2.5 py-1 rounded-bl border-l border-b border-emerald-500/20">
+                  Diberikan Akses Penuh
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="bg-emerald-500/15 text-emerald-400 text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/20">Metode B</span>
+                    <h4 className="text-sm font-bold text-slate-200">Kustom OAuth ID (Bypass Error)</h4>
+                  </div>
+                  <p className="text-xs text-slate-404 leading-relaxed text-slate-400 mb-4">
+                    Sangat direkomendasikan untuk AI Studio. Buat OAuth Client ID Anda sendiri di Google Cloud Console untuk kendali penuh dan bebas whitelist Firebase.
+                  </p>
+
+                  <div className="space-y-3 mb-4">
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-semibold block mb-1">Google OAuth Client ID:</label>
+                      <input
+                        type="text"
+                        placeholder="Paste Google Client ID di sini..."
+                        value={customClientId}
+                        onChange={(e) => setCustomClientId(e.target.value)}
+                        className="bg-slate-900 border border-slate-800 text-slate-100 text-xs px-3 py-2.5 rounded-lg w-full focus:outline-none focus:border-emerald-500"
+                        id="custom-client-id-input"
+                      />
+                    </div>
+
+                    <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 text-[10px] space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400 font-mono">Origins:</span>
+                        <div className="flex items-center gap-1">
+                          <code className="text-emerald-400 select-all font-mono">{window.location.origin}</code>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(window.location.origin);
+                              showAlert('Origin tersalin!', 'success');
+                            }}
+                            className="bg-slate-800 hover:bg-slate-705 p-1 rounded hover:text-white cursor-pointer"
+                            title="Salin Origin"
+                            type="button"
+                          >
+                            <Copy className="w-3 h-3 text-slate-400" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400 font-mono">Redirect URI:</span>
+                        <div className="flex items-center gap-1">
+                          <code className="text-emerald-400 select-all font-mono">{window.location.origin}</code>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(window.location.origin);
+                              showAlert('Redirect URI tersalin!', 'success');
+                            }}
+                            className="bg-slate-800 hover:bg-slate-705 p-1 rounded hover:text-white cursor-pointer"
+                            title="Salin Redirect URI"
+                            type="button"
+                          >
+                            <Copy className="w-3 h-3 text-slate-400" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5 mt-4">
+                  <button
+                    onClick={executeCustomOAuthConnect}
+                    className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 cursor-pointer"
+                    type="button"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Sambungkan via Kustom OAuth
+                  </button>
+                  <a
+                    href="https://console.cloud.google.com/apis/credentials"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center text-[10px] text-slate-400 hover:text-emerald-400 underline transition-colors"
+                  >
+                    Buka Google GCP Credentials page ↗
+                  </a>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Instruction Footer */}
+            <div className="mt-6 border-t border-slate-800 pt-4 text-[10px] text-slate-400 text-left">
+              <span className="font-bold text-slate-300 block mb-1">Panduan Singkat GCP (Metode B):</span>
+              <ol className="list-decimal pl-4 space-y-1">
+                <li>Buka Google Cloud Console, lalu pilih/buat proyek.</li>
+                <li>Pergi ke menu API & Services &gt; Credentials, klik "+ Create Credentials" &gt; "OAuth client ID".</li>
+                <li>Pilih Application Type: <strong className="text-slate-200">Web application</strong>.</li>
+                <li>Tambahkan alamat <code className="text-slate-300">Origin</code> & <code className="text-slate-300">Redirect URI</code> di atas ke konfigurasi kredensial Anda, klik Simpan, lalu salin Client ID yang terbentuk ke input kolom di atas!</li>
+              </ol>
+            </div>
+
           </div>
         </div>
       )}
