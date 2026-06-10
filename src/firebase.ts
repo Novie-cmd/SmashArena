@@ -15,7 +15,7 @@ import { Booking } from './types';
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
 
 // Critical validation of connection to Firestore as mandated by SKILL.md
 async function testConnection() {
