@@ -40,6 +40,7 @@ export default function App() {
   const [showScanner, setShowScanner] = useState<boolean>(false);
   const [scanProgress, setScanProgress] = useState<number>(0);
   const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'success'>('idle');
+  const [showExitModal, setShowExitModal] = useState<boolean>(false);
 
   // State Management
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -387,9 +388,7 @@ export default function App() {
         userEmail={userEmail}
         isCustomerOnly={isCustomerOnly}
         onExitCustomerOnly={() => {
-          setIsCustomerOnly(false);
-          localStorage.removeItem('smasharena_customer_only');
-          showAlert('Keluar dari Mode Scan Barcode Pelanggan.', 'info');
+          setShowExitModal(true);
         }}
       />
 
@@ -446,26 +445,59 @@ export default function App() {
           <div className="space-y-6">
             {/* SCANNER TRIGGER BANNER FOR CUSTOMERS */}
             {!isCustomerOnly && (
-              <div className="bg-slate-905 border border-slate-850 p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl bg-gradient-to-r from-slate-900 to-slate-950" id="customer-scan-advert">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/15 animate-pulse shrink-0">
-                    <QrCode className="w-6 h-6" />
-                  </div>
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex flex-col lg:flex-row items-center justify-between gap-6 shadow-xl" id="customer-scan-advert">
+                <div className="space-y-4 flex-1">
+                  <span className="bg-emerald-950 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-md text-[10px] font-mono font-bold uppercase tracking-wide">
+                    QR Barcode Meja Pelanggan
+                  </span>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-100 flex items-center gap-1.5">
+                    <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                       📲 Portal Pelanggan QR Mandiri
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed max-w-xl">
-                      Simulasikan pemindaian barcode/QR code meja SmashArena. Pindai kode untuk mengunci aplikasi eksklusif ke portal penyewaan pelanggan mandiri (sembunyikan dasbor admin demi privasi keuangan).
+                    <p className="text-xs text-slate-400 mt-2 leading-relaxed max-w-xl">
+                      Pindai QR Code di sebelah kanan dengan HP Anda, atau klik tombol di bawah untuk mengaktifkan **Portal Pelanggan Mandiri**. Lakukan pemesanan mandiri secara cepat dan praktis!
                     </p>
                   </div>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={handleStartScan}
+                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-2.5 px-5 rounded-xl text-xs flex items-center gap-2 transition-transform active:scale-95 cursor-pointer shadow-lg shrink-0"
+                    >
+                      <Camera className="w-4 h-4" /> Mulai Pindai QR Barcode (Simulasi)
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={handleStartScan}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-2.5 px-5 rounded-xl text-xs flex items-center gap-2 transition-transform active:scale-95 cursor-pointer shrink-0 shadow-lg"
-                >
-                  <Camera className="w-4 h-4" /> Mulai Pindai QR Barcode
-                </button>
+
+                {/* Explicit Customer QR Barcode Card */}
+                <div className="border border-slate-750 bg-white p-4 rounded-xl flex flex-col items-center justify-center text-slate-950 shadow-2xl relative shrink-0">
+                  <div className="border-4 border-slate-100 p-1.5 bg-white rounded-lg">
+                    <svg className="w-28 h-28 text-slate-950 cursor-pointer hover:scale-105 transition-transform" viewBox="0 0 100 100" fill="currentColor" onClick={handleStartScan} title="Klik untuk Mulai Pindai">
+                      {/* Outer corner squares */}
+                      <path d="M0,0 h30 v30 h-30 z M10,10 h10 v10 h-10 z" />
+                      <path d="M70,0 h30 v30 h-30 z M80,10 h10 v10 h-10 z" />
+                      <path d="M0,70 h30 v30 h-30 z M10,80 h10 v10 h-10 z" />
+                      {/* Inner alignment pattern squares and random looking QR barcode data */}
+                      <rect x="35" y="5" width="8" height="8" />
+                      <rect x="48" y="15" width="12" height="6" />
+                      <rect x="5" y="35" width="10" height="10" />
+                      <rect x="45" y="35" width="20" height="15" />
+                      <rect x="80" y="35" width="15" height="10" />
+                      <rect x="35" y="55" width="12" height="12" />
+                      <rect x="55" y="55" width="10" height="6" />
+                      <rect x="75" y="55" width="20" height="10" />
+                      <rect x="35" y="75" width="25" height="20" />
+                      <rect x="75" y="75" width="10" height="10" />
+                      <rect x="90" y="85" width="10" height="10" />
+                      <rect x="15" y="50" width="10" height="4" />
+                    </svg>
+                  </div>
+                  <span className="text-[10px] font-mono tracking-widest font-bold mt-2 uppercase text-slate-800 text-center">
+                    SMASHARENA-PORTAL
+                  </span>
+                  <span className="text-[8px] font-semibold text-slate-500 mt-0.5 text-center">
+                    PINDAI DENGAN HP / KLIK QR
+                  </span>
+                </div>
               </div>
             )}
 
@@ -497,6 +529,8 @@ export default function App() {
                   selectedDate={selectedDate}
                   onClearSlots={() => setSelectedSlots([])}
                   onAddBookings={handleAddBookings}
+                  isCustomerOnly={isCustomerOnly}
+                  onExitCustomerOnly={() => setShowExitModal(true)}
                 />
               </div>
 
@@ -594,6 +628,49 @@ export default function App() {
               className="mt-6 bg-slate-950 hover:bg-slate-850 hover:text-white text-slate-400 text-xs font-semibold py-2 px-5 rounded-xl border border-slate-800 transition-colors cursor-pointer"
             >
               Batalkan
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* GOOGLE EXIT REDIRECT MODAL */}
+      {showExitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-fade-in" id="customer-exit-modal">
+          <div className="bg-slate-900 border border-emerald-500/30 w-full max-w-md rounded-2xl p-6 text-center shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-emerald-500"></div>
+
+            <div className="my-4 p-4 bg-emerald-500/10 text-emerald-400 rounded-full w-16 h-16 mx-auto flex items-center justify-center border border-emerald-500/20">
+              <CheckCircle className="w-8 h-8 text-emerald-400 animate-pulse" />
+            </div>
+
+            <h3 className="text-base font-bold text-slate-100 mt-2">
+              Pemesanan Selesai
+            </h3>
+            <p className="text-sm text-slate-300 mt-3 px-2 leading-relaxed font-semibold">
+              Terima Kasih telah melakukan Pemesanan Sewa Lapangan di Smash Arena
+            </p>
+
+            <button
+              onClick={() => {
+                // Reset state
+                setIsCustomerOnly(false);
+                setShowExitModal(false);
+                localStorage.removeItem('smasharena_customer_only');
+                // Redirect to Google
+                try {
+                  window.location.href = 'https://www.google.com';
+                } catch (e) {
+                  try {
+                    window.parent.location.href = 'https://www.google.com';
+                  } catch (err) {
+                    window.open('https://www.google.com', '_self');
+                  }
+                }
+              }}
+              className="mt-6 w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3 px-6 rounded-xl text-xs transition-colors cursor-pointer shadow-lg shadow-emerald-500/10"
+              id="confirm-exit-google-btn"
+            >
+              OK
             </button>
           </div>
         </div>

@@ -8,13 +8,17 @@ interface BookingWizardProps {
   selectedDate: string;
   onClearSlots: () => void;
   onAddBookings: (newBookings: Booking[]) => void;
+  isCustomerOnly?: boolean;
+  onExitCustomerOnly?: () => void;
 }
 
 export default function BookingWizard({
   selectedSlots,
   selectedDate,
   onClearSlots,
-  onAddBookings
+  onAddBookings,
+  isCustomerOnly = false,
+  onExitCustomerOnly
 }: BookingWizardProps) {
   // Wizard steps: 'info' -> 'payment' -> 'processing' -> 'success'
   const [step, setStep] = useState<'info' | 'payment' | 'processing' | 'success'>('info');
@@ -431,6 +435,15 @@ _Silakan tunjukkan chat ini di meja resepsionis saat tiba di lapangan bulutangki
               >
                 Pesan Lapangan Lagi
               </button>
+
+              {isCustomerOnly && onExitCustomerOnly && (
+                <button
+                  onClick={onExitCustomerOnly}
+                  className="w-full mt-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold py-2.5 rounded-lg text-xs transition-all flex items-center justify-center gap-1.5 shadow"
+                >
+                  Keluar dari Portal Pelanggan 🚪
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
