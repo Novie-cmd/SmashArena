@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import firebaseConfig from '../firebase-applet-config.json';
 import Header from './components/Header';
 import CourtGrid from './components/CourtGrid';
 import BookingWizard from './components/BookingWizard';
@@ -14,7 +15,7 @@ import {
   saveBookingToFirestore,
   deleteBookingFromFirestore
 } from './firebase';
-import { FileSpreadsheet, ShieldCheck, CheckCircle, Smartphone, Info, RefreshCw, Camera, QrCode } from 'lucide-react';
+import { FileSpreadsheet, ShieldCheck, CheckCircle, Smartphone, Info, RefreshCw, Camera, QrCode, Copy, ExternalLink, AlertTriangle } from 'lucide-react';
 
 export default function App() {
   // Barcode / Scanner Mode states
@@ -65,6 +66,10 @@ export default function App() {
     lastSync: null
   });
 
+  // Authorized Domain configuration modal state
+  const [showDomainModal, setShowDomainModal] = useState<boolean>(false);
+  const [copiedText, setCopiedText] = useState<'none' | 'dev' | 'pre'>('none');
+
   // UI Toast indicators
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
@@ -72,6 +77,14 @@ export default function App() {
   const showAlert = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 5000);
+  };
+
+  const handleCopy = (text: string, type: 'dev' | 'pre') => {
+    navigator.clipboard.writeText(text);
+    setCopiedText(type);
+    setTimeout(() => {
+      setCopiedText('none');
+    }, 2000);
   };
 
   // Scan trigger
@@ -337,7 +350,16 @@ export default function App() {
     } catch (error: any) {
       console.error('Error connecting Google Sheets:', error);
       setSheetsInfo(prev => ({ ...prev, status: 'disconnected', error: error.message }));
-      showAlert('Gagal menyambung ke Google Sheets: ' + error.message, 'error');
+      const isUnauthorizedDomain = error.message && (
+        error.message.includes('auth/unauthorized-domain') || 
+        error.code === 'auth/unauthorized-domain'
+      );
+      if (isUnauthorizedDomain) {
+        setShowDomainModal(true);
+        showAlert('Gagal menyambunig: Domain belum di-whitelist di Firebase.', 'error');
+      } else {
+        showAlert('Gagal menyambung ke Google Sheets: ' + error.message, 'error');
+      }
     }
   };
 
@@ -385,7 +407,16 @@ export default function App() {
     } catch (err: any) {
       console.error(err);
       setSheetsInfo(prev => ({ ...prev, status: 'connected', error: err.message }));
-      showAlert('Sinkronisasi gagal: ' + err.message, 'error');
+      const isUnauthorizedDomain = err.message && (
+        err.message.includes('auth/unauthorized-domain') || 
+        err.code === 'auth/unauthorized-domain'
+      );
+      if (isUnauthorizedDomain) {
+        setShowDomainModal(true);
+        showAlert('Gagal sinkron: Domain belum di-whitelist di Firebase.', 'error');
+      } else {
+        showAlert('Sinkronisasi gagal: ' + err.message, 'error');
+      }
     }
   };
 
@@ -702,6 +733,111 @@ export default function App() {
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* FIREBASE AUTHORIZED DOMAINS TUTORIAL MODAL */}
+      {showDomainModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 overflow-y-auto animate-fade-in" id="firebase-domain-modal">
+          <div className="bg-slate-900 border border-amber-500/30 w-full max-w-lg rounded-2xl p-6 shadow-2xl relative overflow-hidden my-8">
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-amber-500"></div>
+
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl border border-amber-500/20 shrink-0">
+                <AlertTriangle className="w-6 h-6 text-amber-500" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-lg font-bold text-slate-100">
+                  Domain Belum Diizinkan (Firebase)
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Google Sign-In ditolak karena alamat domain aplikasi Anda belum didaftarkan sebagai "Authorized domain" di Firebase Console proyek Anda.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 my-6 text-xs text-left" id="current-domain-details">
+              <span className="text-slate-400 block mb-2 font-semibold">Salin domain berikut salah satu per satu:</span>
+              
+              <div className="space-y-3">
+                {/* Dev domain row */}
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-0.5 font-mono">Domain Tampilan Dev (Vite Host):</span>
+                  <div className="flex items-center justify-between bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                    <span className="font-mono text-emerald-400 select-all overflow-hidden text-ellipsis whitespace-nowrap max-w-[280px]">
+                      ais-dev-6zou5qcyb73drknlbz26vz-38910374399.asia-east1.run.app
+                    </span>
+                    <button
+                      onClick={() => handleCopy('ais-dev-6zou5qcyb73drknlbz26vz-38910374399.asia-east1.run.app', 'dev')}
+                      className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-350 hover:text-white px-2.5 py-1 rounded-md font-medium transition-colors border border-slate-750 text-[11px] cursor-pointer"
+                      type="button"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      {copiedText === 'dev' ? 'Tersalin' : 'Salin'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Pre/Shared domain row */}
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-0.5 font-mono">Domain Tampilan Shared (Preview Host):</span>
+                  <div className="flex items-center justify-between bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                    <span className="font-mono text-emerald-400 select-all overflow-hidden text-ellipsis whitespace-nowrap max-w-[280px]">
+                      ais-pre-6zou5qcyb73drknlbz26vz-38910374399.asia-east1.run.app
+                    </span>
+                    <button
+                      onClick={() => handleCopy('ais-pre-6zou5qcyb73drknlbz26vz-38910374399.asia-east1.run.app', 'pre')}
+                      className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-350 hover:text-white px-2.5 py-1 rounded-md font-medium transition-colors border border-slate-750 text-[11px] cursor-pointer"
+                      type="button"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      {copiedText === 'pre' ? 'Tersalin' : 'Salin'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-300 space-y-3 text-left">
+              <p className="font-bold text-slate-200">Cara Mengatasi (Sangat Mudah):</p>
+              <ol className="list-decimal pl-5 space-y-2 text-slate-400">
+                <li>
+                  Klik tombol <strong className="text-slate-200">"Buka Firebase Console"</strong> di bawah ini.
+                </li>
+                <li>
+                  Scroll ke paling bawah sampai menemukan tabel/bagian <strong className="text-amber-400/90 font-semibold text-slate-200">Domain resmi (Authorized domains)</strong>.
+                </li>
+                <li>
+                  Klik tombol <strong className="text-slate-200">Add domain (Tambah domain)</strong>.
+                </li>
+                <li>
+                  Masukkan (tempel) salah satu atau kedua domain di atas yang sudah Anda salin.
+                </li>
+                <li>
+                  Klik <strong className="text-slate-200">Add (Tambahkan)</strong>, lalu kembali ke aplikasi SmashArena ini dan hubungkan Google Sheets kembali!
+                </li>
+              </ol>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 mt-6">
+              <a
+                href={`https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/providers`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 text-center shadow-lg shadow-amber-500/10 cursor-pointer"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Buka Firebase Console
+              </a>
+              <button
+                onClick={() => setShowDomainModal(false)}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 px-4 rounded-xl text-xs transition-colors border border-slate-700 cursor-pointer text-center"
+                type="button"
+              >
+                Tutup Panduan
+              </button>
+            </div>
           </div>
         </div>
       )}
