@@ -1,5 +1,5 @@
 {
-  "name": "Pemesanan Lapangan Bulu Tangkis",
+  "name": "Fazada Badminton",
   "description": "Aplikasi pemesanan lapangan bulu tangkis secara real-time dengan pembayaran otomatis, notifikasi WhatsApp, laporan keuangan, dan integrasi Google Sheets.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
