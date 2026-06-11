@@ -1051,7 +1051,7 @@ export default function App() {
       {/* GOOGLE SHEETS CONFIGURATION MODAL */}
       {showSheetsConfigModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 backdrop-blur-md p-4 overflow-y-auto animate-fade-in" id="sheets-config-modal">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 shadow-2xl relative overflow-hidden my-8">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl relative overflow-hidden my-8">
             <div className="absolute top-0 left-0 w-full h-1.5 bg-emerald-500"></div>
 
             <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
@@ -1060,7 +1060,7 @@ export default function App() {
                   <FileSpreadsheet className="w-5 h-5" />
                 </div>
                 <h3 className="text-lg font-bold text-slate-100">
-                  Tautkan Google Spreadsheet
+                  Sinkronisasi Layanan Google
                 </h3>
               </div>
               <button 
@@ -1071,128 +1071,98 @@ export default function App() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* METHOD A: FIREBASE AUTOMATIC */}
-              <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between text-left">
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="bg-blue-500/15 text-blue-400 text-[10px] font-mono px-2 py-0.5 rounded border border-blue-500/20">Metode A</span>
-                    <h4 className="text-sm font-bold text-slate-200">Koneksi Otomatis</h4>
-                  </div>
-                  <p className="text-xs text-slate-404 leading-relaxed text-slate-400 mb-4">
-                    Menggunakan login Google default dari Firebase. Sangat praktis namun membutuhkan pengaturan whitelist domain di Firebase Console jika terjadi error <code className="text-amber-400">auth/unauthorized-domain</code>.
-                  </p>
-                </div>
-                
-                <button
-                  onClick={executeFirebaseConnectSheets}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-blue-600/15 cursor-pointer mt-4"
-                  type="button"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Masuk via Firebase
-                </button>
+            <div className="flex flex-col items-center text-center py-4">
+              <div className="w-16 h-16 bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 rounded-2xl flex items-center justify-center shadow-xl shadow-emerald-500/20 mb-5">
+                <FileSpreadsheet className="w-8 h-8 text-slate-900" />
               </div>
 
-              {/* METHOD B: CUSTOM CLIENT ID */}
-              <div className="bg-slate-950 p-5 rounded-2xl border border-emerald-500/20 shadow-lg shadow-emerald-500/5 relative overflow-hidden flex flex-col justify-between text-left">
-                <div className="absolute top-0 right-0 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold px-2.5 py-1 rounded-bl border-l border-b border-emerald-500/20">
-                  Diberikan Akses Penuh
-                </div>
+              <h4 className="text-lg font-extrabold text-slate-150 tracking-tight">
+                Integrasikan dengan Google
+              </h4>
+              
+              <p className="text-xs text-slate-400 max-w-sm mt-2 leading-relaxed">
+                Tautkan aplikasi <strong className="text-emerald-400">SmashArena</strong> langsung dengan akun Google Anda untuk mengotomatiskan pencatatan di <strong className="text-slate-200">Google Sheets</strong> & penyimpanan dokumen pada <strong className="text-slate-200">Google Drive</strong>.
+              </p>
 
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="bg-emerald-500/15 text-emerald-400 text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/20">Metode B</span>
-                    <h4 className="text-sm font-bold text-slate-200">Kustom OAuth ID (Bypass Error)</h4>
-                  </div>
-                  <p className="text-xs text-slate-404 leading-relaxed text-slate-400 mb-4">
-                    Sangat direkomendasikan untuk AI Studio. Buat OAuth Client ID Anda sendiri di Google Cloud Console untuk kendali penuh dan bebas whitelist Firebase.
+              <div className="w-full mt-6 space-y-3">
+                <button
+                  onClick={executeFirebaseConnectSheets}
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 px-6 rounded-xl text-xs transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/10 active:scale-[0.98] cursor-pointer"
+                  type="button"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Hubungkan dengan Akun Google
+                </button>
+                <p className="text-[10px] text-slate-500 leading-snug">
+                  *Aman dan instan menggunakan Google OAuth 2.0 resmi.
+                </p>
+              </div>
+            </div>
+
+            {/* Collapsible Advanced Settings for custom Client ID */}
+            <div className="mt-4 border-t border-slate-800/60 pt-4">
+              <details className="group text-left">
+                <summary className="flex items-center justify-between text-[11px] font-semibold text-slate-500 hover:text-slate-400 cursor-pointer select-none transition-colors">
+                  <span>Konfigurasi Kustom OAuth Lanjutan (Opsional)</span>
+                  <span className="transition-transform duration-200 group-open:rotate-180 text-slate-600 font-mono text-[10px]">▼</span>
+                </summary>
+                
+                <div className="mt-3 p-4 bg-slate-950/80 rounded-xl border border-slate-800/80 space-y-3 animate-fade-in text-[10px]">
+                  <p className="text-slate-400 leading-relaxed">
+                    Hanya gunakan konfigurasi kustom Google Cloud Platform ini apabila domain redirect Firebase Anda mengalami kendala perizinan.
                   </p>
 
-                  <div className="space-y-3 mb-4">
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-semibold block mb-1">Google OAuth Client ID:</label>
-                      <input
-                        type="text"
-                        placeholder="Paste Google Client ID di sini..."
-                        value={customClientId}
-                        onChange={(e) => setCustomClientId(e.target.value)}
-                        className="bg-slate-900 border border-slate-800 text-slate-100 text-xs px-3 py-2.5 rounded-lg w-full focus:outline-none focus:border-emerald-500"
-                        id="custom-client-id-input"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-semibold block mb-1">Google OAuth Client ID:</label>
+                    <input
+                      type="text"
+                      placeholder="Paste Google Client ID di sini..."
+                      value={customClientId}
+                      onChange={(e) => setCustomClientId(e.target.value)}
+                      className="bg-slate-900 border border-slate-800 text-slate-100 text-xs px-3 py-2.5 rounded-lg w-full focus:outline-none focus:border-emerald-500/70"
+                      id="custom-client-id-input"
+                    />
+                  </div>
 
-                    <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 text-[10px] space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-400 font-mono">Origins:</span>
-                        <div className="flex items-center gap-1">
-                          <code className="text-emerald-400 select-all font-mono">{window.location.origin}</code>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(window.location.origin);
-                              showAlert('Origin tersalin!', 'success');
-                            }}
-                            className="bg-slate-800 hover:bg-slate-705 p-1 rounded hover:text-white cursor-pointer"
-                            title="Salin Origin"
-                            type="button"
-                          >
-                            <Copy className="w-3 h-3 text-slate-400" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-400 font-mono">Redirect URI:</span>
-                        <div className="flex items-center gap-1">
-                          <code className="text-emerald-400 select-all font-mono">{window.location.origin}</code>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(window.location.origin);
-                              showAlert('Redirect URI tersalin!', 'success');
-                            }}
-                            className="bg-slate-800 hover:bg-slate-705 p-1 rounded hover:text-white cursor-pointer"
-                            title="Salin Redirect URI"
-                            type="button"
-                          >
-                            <Copy className="w-3 h-3 text-slate-400" />
-                          </button>
-                        </div>
+                  <div className="p-2.5 bg-slate-900 rounded-lg space-y-1.5 text-[9px] font-mono border border-slate-800/40">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">Origin / Redirect URI:</span>
+                      <div className="flex items-center gap-1">
+                        <code className="text-emerald-400 select-all">{window.location.origin}</code>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(window.location.origin);
+                            showAlert('Origin tersalin!', 'success');
+                          }}
+                          className="bg-slate-800 hover:bg-slate-700 p-0.5 rounded text-slate-400 hover:text-white cursor-pointer"
+                          title="Salin Origin"
+                          type="button"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-2.5 mt-4">
                   <button
                     onClick={executeCustomOAuthConnect}
-                    className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 cursor-pointer"
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2 px-3 rounded-lg text-[10px] transition-colors border border-slate-750 flex items-center justify-center gap-1 cursor-pointer"
                     type="button"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
+                    <ExternalLink className="w-3 h-3" />
                     Sambungkan via Kustom OAuth
                   </button>
+
                   <a
                     href="https://console.cloud.google.com/apis/credentials"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-center text-[10px] text-slate-400 hover:text-emerald-400 underline transition-colors"
+                    className="block text-center text-[9px] text-emerald-450 hover:text-emerald-400 hover:underline transition-colors pt-1"
                   >
                     Buka Google GCP Credentials page ↗
                   </a>
                 </div>
-              </div>
-
-            </div>
-
-            {/* Instruction Footer */}
-            <div className="mt-6 border-t border-slate-800 pt-4 text-[10px] text-slate-400 text-left">
-              <span className="font-bold text-slate-300 block mb-1">Panduan Singkat GCP (Metode B):</span>
-              <ol className="list-decimal pl-4 space-y-1">
-                <li>Buka Google Cloud Console, lalu pilih/buat proyek.</li>
-                <li>Pergi ke menu API & Services &gt; Credentials, klik "+ Create Credentials" &gt; "OAuth client ID".</li>
-                <li>Pilih Application Type: <strong className="text-slate-200">Web application</strong>.</li>
-                <li>Tambahkan alamat <code className="text-slate-300">Origin</code> & <code className="text-slate-300">Redirect URI</code> di atas ke konfigurasi kredensial Anda, klik Simpan, lalu salin Client ID yang terbentuk ke input kolom di atas!</li>
-              </ol>
+              </details>
             </div>
 
           </div>
